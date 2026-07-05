@@ -1,0 +1,6 @@
+{
+  "name": "Digital Restaurant Bridge",
+  "description": "A digital-analog restaurant ordering system bridging smartphone menus with thermal receipt kitchen printers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
