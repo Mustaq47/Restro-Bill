@@ -23,11 +23,13 @@ export interface MenuItem {
   is_non_veg: boolean;
   is_spicy: boolean;
   image_url: string;
+  recipe_instructions?: string; // Secret recipe instructions
+  ingredients?: string;          // Structuring ingredients
 }
 
 export type OrderStatus = 'pending' | 'accepted' | 'preparing' | 'completed' | 'cancelled';
-export type PaymentStatus = 'unpaid' | 'paid';
-export type PaymentMethod = 'cash' | 'digital';
+export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'unpaid';
+export type PaymentMethod = 'cash' | 'upi' | 'card' | 'digital';
 
 export interface Order {
   id: string;

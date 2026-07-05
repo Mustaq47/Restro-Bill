@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User } from '../types';
-import { Mail, Lock, LogIn, UserPlus, Info, Check } from 'lucide-react';
+import { Mail, Lock, LogIn, UserPlus, Info, Check, User as UserIcon, Phone } from 'lucide-react';
 
 interface MailAuthProps {
   onLogin: (user: User) => void;
@@ -10,6 +10,8 @@ export const MailAuth: React.FC<MailAuthProps> = ({ onLogin }) => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -32,6 +34,24 @@ export const MailAuth: React.FC<MailAuthProps> = ({ onLogin }) => {
     const storedUsers = JSON.parse(localStorage.getItem('restaurant_users') || '[]');
 
     if (isSignUp) {
+      // Form Validation for Sign Up
+      if (!fullName.trim()) {
+        setError('Please enter your Full Name.');
+        return;
+      }
+
+      if (!phoneNumber.trim()) {
+        setError('Please enter your Phone Number.');
+        return;
+      }
+
+      // Check for country-coded 10-12 digit phone number format
+      const phoneRegex = /^\+?[0-9]{10,12}$/;
+      if (!phoneRegex.test(phoneNumber.trim())) {
+        setError('Invalid Phone Number format. Must be 10-12 digits with an optional leading "+" country-code (e.g. +919876543210 or 9876543210).');
+        return;
+      }
+
       // Sign Up flow
       const userExists = storedUsers.some((u: any) => u.email.toLowerCase() === email.toLowerCase());
       if (userExists || email.toLowerCase() === 'admin@palaceinn.com') {
@@ -41,13 +61,15 @@ export const MailAuth: React.FC<MailAuthProps> = ({ onLogin }) => {
 
       // Determine role based on email - if email is admin@palaceinn.com, it is admin
       const role = 'guest';
-      const newUser = { email, password, role };
+      const newUser = { email, password, role, fullName: fullName.trim(), phoneNumber: phoneNumber.trim() };
       storedUsers.push(newUser);
       localStorage.setItem('restaurant_users', JSON.stringify(storedUsers));
 
       setSuccess('Account created successfully! You can now log in.');
       setIsSignUp(false);
       setPassword('');
+      setFullName('');
+      setPhoneNumber('');
     } else {
       // Login flow
       // 1. Check if Temp Admin
@@ -122,6 +144,45 @@ export const MailAuth: React.FC<MailAuthProps> = ({ onLogin }) => {
           </div>
         )}
 
+        {isSignUp && (
+          <>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                Full Name
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="e.g., Jane Doe"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl pl-9 pr-3 py-2.5 text-slate-850 placeholder-slate-400 focus:outline-none focus:border-slate-400 transition-colors"
+                  required
+                />
+                <UserIcon className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 top-3" />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                Phone Number (Country Code Coded, 10-12 Digits)
+              </label>
+              <div className="relative">
+                <input
+                  type="tel"
+                  placeholder="e.g., +919876543210"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl pl-9 pr-3 py-2.5 text-slate-850 placeholder-slate-400 focus:outline-none focus:border-slate-400 transition-colors"
+                  required
+                />
+                <Phone className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 top-3" />
+              </div>
+              <p className="text-[9px] text-slate-400 font-mono">Include optional country code + and 10 to 12 digits (no spaces/dashes).</p>
+            </div>
+          </>
+        )}
+
         <div className="space-y-1.5">
           <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
             Email Address
@@ -169,6 +230,48 @@ export const MailAuth: React.FC<MailAuthProps> = ({ onLogin }) => {
               <LogIn className="w-4 h-4" /> Log In securely
             </>
           )}
+        </button>
+
+        <div className="relative my-3 flex items-center justify-center">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t border-slate-100"></span>
+          </div>
+          <span className="relative bg-white px-3 text-[10px] uppercase font-bold text-slate-400 font-mono">Or</span>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            let tNum = 1;
+            try {
+              if (typeof window !== 'undefined') {
+                const params = new URLSearchParams(window.location.search);
+                const tableParam = params.get('table_id') || params.get('table') || params.get('table_number') || params.get('tableNum');
+                if (tableParam) {
+                  const parsed = parseInt(tableParam, 10);
+                  if (!isNaN(parsed) && parsed > 0) tNum = parsed;
+                }
+              }
+            } catch (e) {
+              console.error(e);
+            }
+            onLogin({ email: `guest.table${tNum}@palaceinn.com`, role: 'guest' });
+          }}
+          className="w-full bg-slate-50 hover:bg-slate-100 text-slate-800 border border-slate-200 font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 text-xs cursor-pointer"
+        >
+          🍛 Continue as Guest (Table {(() => {
+            try {
+              if (typeof window !== 'undefined') {
+                const params = new URLSearchParams(window.location.search);
+                const tableParam = params.get('table_id') || params.get('table') || params.get('table_number') || params.get('tableNum');
+                if (tableParam) {
+                  const parsed = parseInt(tableParam, 10);
+                  if (!isNaN(parsed) && parsed > 0) return parsed;
+                }
+              }
+            } catch (e) {}
+            return 1;
+          })()})
         </button>
       </form>
 

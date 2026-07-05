@@ -17,16 +17,42 @@ import {
 export default function App() {
   const [activeRootTab, setActiveRootTab] = useState<'demo' | 'developer'>('demo');
 
-  // Authentication State
+  // Authentication State with robust fallback and auto-login
   const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('current_restaurant_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('current_restaurant_user');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error("Failed to parse current_restaurant_user from localStorage", e);
+    }
+    
+    // Auto-login guest session so they instantly see 'Welcome to Table X' view by default!
+    let tNum = 1;
+    try {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const tableParam = params.get('table_id') || params.get('table') || params.get('table_number') || params.get('tableNum');
+        if (tableParam) {
+          const parsed = parseInt(tableParam, 10);
+          if (!isNaN(parsed) && parsed > 0) tNum = parsed;
+        }
+      }
+    } catch (e) {
+      console.error("Failed parsing URL table param", e);
+    }
+
+    return { email: `guest.table${tNum}@palaceinn.com`, role: 'guest' };
   });
 
   // Mobile responsiveness layout view toggles (useful for testing on any screen size)
   const [viewPreference, setViewPreference] = useState<'both' | 'guest' | 'owner'>(() => {
-    const saved = localStorage.getItem('restaurant_view_pref');
-    return (saved as 'both' | 'guest' | 'owner') || 'both';
+    try {
+      const saved = localStorage.getItem('restaurant_view_pref');
+      if (saved === 'both' || saved === 'guest' || saved === 'owner') return saved;
+    } catch (e) {
+      console.error(e);
+    }
+    return 'both';
   });
 
   useEffect(() => {
@@ -107,8 +133,60 @@ export default function App() {
   ]);
 
   // Guest State tracking
-  const [guestTableNumber, setGuestTableNumber] = useState<number>(4);
-  const [activeGuestOrderId, setActiveGuestOrderId] = useState<string | null>('ord-mock-1');
+  const [guestTableNumber, setGuestTableNumber] = useState<number>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const tableParam = params.get('table_id') || params.get('table') || params.get('table_number') || params.get('tableNum');
+        if (tableParam) {
+          const parsed = parseInt(tableParam, 10);
+          if (!isNaN(parsed) && parsed > 0) return parsed;
+        }
+      }
+    } catch (e) {
+      console.error("Failed parsing table number from URL", e);
+    }
+    return 1; // Default to Table 1 if no query parameter
+  });
+
+  const [activeGuestOrderId, setActiveGuestOrderId] = useState<string | null>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const tableParam = params.get('table_id') || params.get('table') || params.get('table_number') || params.get('tableNum');
+        if (tableParam) {
+          const parsed = parseInt(tableParam, 10);
+          if (parsed === 4) return 'ord-mock-1'; // table 4 has the active mock order loaded
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return null;
+  });
+
+  // Sync URL changes dynamically
+  useEffect(() => {
+    const handleUrlParams = () => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const tableParam = params.get('table_id') || params.get('table') || params.get('table_number') || params.get('tableNum');
+        if (tableParam) {
+          const parsed = parseInt(tableParam, 10);
+          if (!isNaN(parsed) && parsed > 0) {
+            setGuestTableNumber(parsed);
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    handleUrlParams();
+    window.addEventListener('popstate', handleUrlParams);
+    return () => {
+      window.removeEventListener('popstate', handleUrlParams);
+    };
+  }, []);
 
   // Printer Selection state
   const [selectedPrintedOrder, setSelectedPrintedOrder] = useState<Order | null>(null);
@@ -121,6 +199,11 @@ export default function App() {
     setMenuItems(prev => 
       prev.map(item => item.id === itemId ? { ...item, is_available: isAvailable } : item)
     );
+  };
+
+  // HANDLER: Add new menu recipe item (Module B)
+  const handleAddMenuItem = (newItem: MenuItem) => {
+    setMenuItems(prev => [...prev, newItem]);
   };
 
   // HANDLER: Submit guest checkout order
@@ -506,6 +589,7 @@ export function formatKitchenReceipt(order: Order, items: OrderItem[], language:
                   categories={categories}
                   menuItems={menuItems}
                   onToggleMenuItem={handleToggleMenuItem}
+                  onAddMenuItem={handleAddMenuItem}
                   orders={orders}
                   orderItems={orderItems}
                   onUpdateOrderStatus={handleUpdateOrderStatus}
@@ -559,6 +643,7 @@ export function formatKitchenReceipt(order: Order, items: OrderItem[], language:
                       categories={categories}
                       menuItems={menuItems}
                       onToggleMenuItem={handleToggleMenuItem}
+                      onAddMenuItem={handleAddMenuItem}
                       orders={orders}
                       orderItems={orderItems}
                       onUpdateOrderStatus={handleUpdateOrderStatus}

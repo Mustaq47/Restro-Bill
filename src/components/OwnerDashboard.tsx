@@ -14,6 +14,7 @@ interface OwnerDashboardProps {
   categories: MenuCategory[];
   menuItems: MenuItem[];
   onToggleMenuItem: (id: string, isAvailable: boolean) => void;
+  onAddMenuItem: (item: MenuItem) => void;
   orders: Order[];
   orderItems: { [orderId: string]: OrderItem[] };
   onUpdateOrderStatus: (id: string, status: OrderStatus) => void;
@@ -29,6 +30,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   categories,
   menuItems,
   onToggleMenuItem,
+  onAddMenuItem,
   orders,
   orderItems,
   onUpdateOrderStatus,
@@ -39,12 +41,42 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   selectedPrintedOrder,
   setSelectedPrintedOrder
 }) => {
-  const [activeTab, setActiveTab] = useState<'orders' | 'menu' | 'pos' | 'eod'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'menu' | 'pos' | 'eod' | 'analytics'>('analytics');
   
   // Walk-In POS state
   const [posTable, setPosTable] = useState<number>(1);
   const [posCart, setPosCart] = useState<{ [itemId: string]: number }>({});
   const [posNotes, setPosNotes] = useState('');
+
+  // Live dashboard polling simulation (Module A)
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing'>('idle');
+  const [lastSyncTime, setLastSyncTime] = useState<string>(() => new Date().toLocaleTimeString());
+
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setSyncStatus('syncing');
+      setTimeout(() => {
+        setSyncStatus('idle');
+        setLastSyncTime(new Date().toLocaleTimeString());
+      }, 600);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Add Recipe Form State (Module B)
+  const [showAddRecipe, setShowAddRecipe] = useState(false);
+  const [recipeName, setRecipeName] = useState('');
+  const [recipePrice, setRecipePrice] = useState('');
+  const [recipeCategory, setRecipeCategory] = useState('');
+  const [recipeDescription, setRecipeDescription] = useState('');
+  const [recipeInstructions, setRecipeInstructions] = useState('');
+  const [ingredientInput, setIngredientInput] = useState('');
+  const [ingredientList, setIngredientList] = useState<string[]>([]);
+  const [recipeIsVeg, setRecipeIsVeg] = useState(false);
+  const [recipeIsNonVeg, setRecipeIsNonVeg] = useState(false);
+  const [recipeIsSpicy, setRecipeIsSpicy] = useState(false);
+  const [recipeError, setRecipeError] = useState('');
+  const [isSubmittingRecipe, setIsSubmittingRecipe] = useState(false);
 
   // KOT Translation flag
   const [kotLanguage, setKotLanguage] = useState<'EN' | 'LOCAL'>('LOCAL');
@@ -154,6 +186,74 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     alert('🛒 Walk-In Order Submitted and accepted immediately! KOT printed.');
   };
 
+  // Recipe creation handlers (Module B)
+  const handleAddIngredient = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (ingredientInput.trim()) {
+      if (!ingredientList.includes(ingredientInput.trim())) {
+        setIngredientList(prev => [...prev, ingredientInput.trim()]);
+      }
+      setIngredientInput('');
+    }
+  };
+
+  const handleRemoveIngredient = (index: number) => {
+    setIngredientList(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveRecipe = (e: React.FormEvent) => {
+    e.preventDefault();
+    setRecipeError('');
+
+    if (!recipeName.trim()) {
+      setRecipeError('Menu Item Name cannot be empty.');
+      return;
+    }
+
+    const priceNum = parseFloat(recipePrice);
+    if (isNaN(priceNum) || priceNum < 0) {
+      setRecipeError('Price cannot be negative or invalid.');
+      return;
+    }
+
+    const selectedCat = recipeCategory || (categories[0]?.id || '');
+
+    setIsSubmittingRecipe(true);
+
+    // Simulate database write with loading spinner latency
+    setTimeout(() => {
+      const newItem: MenuItem = {
+        id: 'item-recipe-' + Math.random().toString(36).substring(2, 9),
+        category_id: selectedCat,
+        name: recipeName.trim(),
+        description: recipeDescription.trim() || 'No description provided.',
+        price: priceNum,
+        is_available: true,
+        is_veg: recipeIsVeg,
+        is_non_veg: recipeIsNonVeg,
+        is_spicy: recipeIsSpicy,
+        image_url: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=120&auto=format&fit=crop&q=60&ixlib=rb-4.0.3', // Delicious default styling placeholder
+        recipe_instructions: recipeInstructions.trim() || 'No instructions provided.',
+        ingredients: ingredientList.length > 0 ? ingredientList.join(', ') : 'No special tracking ingredients.'
+      };
+
+      onAddMenuItem(newItem);
+
+      // Clean form fields
+      setRecipeName('');
+      setRecipePrice('');
+      setRecipeDescription('');
+      setRecipeInstructions('');
+      setIngredientList([]);
+      setRecipeIsVeg(false);
+      setRecipeIsNonVeg(false);
+      setRecipeIsSpicy(false);
+      setIsSubmittingRecipe(false);
+      setShowAddRecipe(false);
+      alert('👨‍🍳 SUCCESS: Menu Recipe saved and published to live digital menus!');
+    }, 1000);
+  };
+
   return (
     <div className="bg-slate-50 border border-slate-200 rounded-2xl shadow-xl overflow-hidden h-full flex flex-col text-slate-800">
       
@@ -186,6 +286,17 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
 
       {/* Mode Switches */}
       <div className="bg-white border-b border-slate-200 px-6 py-2 flex overflow-x-auto gap-2">
+        <button
+          onClick={() => setActiveTab('analytics')}
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg transition-colors ${
+            activeTab === 'analytics' 
+              ? 'bg-slate-900 text-white shadow-sm' 
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          <BarChart3 className="w-4 h-4" />
+          Daily Sales Analytics
+        </button>
         <button
           onClick={() => setActiveTab('orders')}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg transition-colors ${
@@ -238,6 +349,195 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
         {/* Left Interactive Content Area */}
         <div className="lg:col-span-8 overflow-y-auto p-6 space-y-6 border-r border-slate-200">
           
+          {/* TAB 0: ADMIN DAILY SALES ANALYTICS (Module A) */}
+          {activeTab === 'analytics' && (
+            <div className="space-y-6">
+              {/* Header with Live Sync Status */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-slate-900 text-white rounded-xl p-4 shadow-sm gap-4">
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-wider flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-emerald-400" />
+                    Daily Operations & Financial Analytics
+                  </h3>
+                  <p className="text-[10px] text-slate-300 mt-1">
+                    Real-time transaction flow, register reconciliation, and active guest checkout tracking.
+                  </p>
+                </div>
+
+                {/* Polling Indicator */}
+                <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg text-[10px] font-mono shrink-0 self-start sm:self-auto">
+                  <span className={`w-2 h-2 rounded-full ${syncStatus === 'syncing' ? 'bg-emerald-400 animate-ping' : 'bg-emerald-500 animate-pulse'}`}></span>
+                  <span className="text-slate-200">
+                    {syncStatus === 'syncing' ? 'Polling database...' : 'Live Polling Active'}
+                  </span>
+                  <span className="text-slate-500">|</span>
+                  <span className="text-slate-400">Sync: {lastSyncTime}</span>
+                </div>
+              </div>
+
+              {/* KPI Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Revenue Card */}
+                <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm space-y-2 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Gross Revenue Today</span>
+                    <DollarSign className="w-4 h-4 text-slate-400" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-black text-slate-900 font-mono">
+                      ${orders.reduce((sum, o) => o.payment_status === 'paid' ? sum + o.total_amount : sum, 0).toFixed(2)}
+                    </p>
+                    <p className="text-[9px] text-slate-400 font-mono mt-1">
+                      From ${orders.reduce((sum, o) => sum + o.total_amount, 0).toFixed(2)} in total bookings
+                    </p>
+                  </div>
+                </div>
+
+                {/* Orders Completed Card */}
+                <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm space-y-2 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Completed Orders</span>
+                    <CheckCircle className="w-4 h-4 text-slate-400" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-black text-slate-900 font-mono">
+                      {orders.filter(o => o.status === 'completed').length}
+                    </p>
+                    <p className="text-[9px] text-slate-400 font-mono mt-1">
+                      {orders.filter(o => o.status === 'pending').length} pending in kitchen queue
+                    </p>
+                  </div>
+                </div>
+
+                {/* AOV Card */}
+                <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm space-y-2 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Average Order Value (AOV)</span>
+                    <TrendingUp className="w-4 h-4 text-slate-400" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-black text-slate-900 font-mono">
+                      ${(() => {
+                        const paidOrders = orders.filter(o => o.payment_status === 'paid');
+                        if (paidOrders.length > 0) {
+                          const paidSum = paidOrders.reduce((sum, o) => sum + o.total_amount, 0);
+                          return paidSum / paidOrders.length;
+                        }
+                        return orders.length > 0 
+                          ? orders.reduce((sum, o) => sum + o.total_amount, 0) / orders.length 
+                          : 0;
+                      })().toFixed(2)}
+                    </p>
+                    <p className="text-[9px] text-slate-400 font-mono mt-1">
+                      Calculated across settled payouts
+                    </p>
+                  </div>
+                </div>
+
+                {/* Cash vs Digital Split */}
+                <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm space-y-2 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Revenue Split (Settled)</span>
+                    <Layers className="w-4 h-4 text-slate-400" />
+                  </div>
+                  <div className="space-y-1">
+                    {(() => {
+                      const cashRev = orders.filter(o => o.payment_status === 'paid' && o.payment_method === 'cash').reduce((sum, o) => sum + o.total_amount, 0);
+                      const digRev = orders.filter(o => o.payment_status === 'paid' && (o.payment_method === 'upi' || o.payment_method === 'card' || o.payment_method === 'digital')).reduce((sum, o) => sum + o.total_amount, 0);
+                      const totalRev = cashRev + digRev;
+                      const cashPct = totalRev > 0 ? Math.round((cashRev / totalRev) * 100) : 0;
+                      const digPct = totalRev > 0 ? Math.round((digRev / totalRev) * 100) : 0;
+
+                      return (
+                        <>
+                          <div className="flex justify-between text-[10px] font-bold text-slate-600 font-mono">
+                            <span>Cash: {cashPct}%</span>
+                            <span>Digital: {digPct}%</span>
+                          </div>
+                          <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden flex">
+                            <div className="bg-amber-500 h-full" style={{ width: `${totalRev > 0 ? (cashRev / totalRev) * 100 : 50}%` }} title={`Cash: $${cashRev.toFixed(2)}`}></div>
+                            <div className="bg-indigo-600 h-full flex-1" style={{ width: `${totalRev > 0 ? (digRev / totalRev) * 100 : 50}%` }} title={`Digital: $${digRev.toFixed(2)}`}></div>
+                          </div>
+                          <p className="text-[8px] text-slate-400 font-mono text-center pt-1 leading-none">
+                            Cash: ${cashRev.toFixed(2)} | Dig: ${digRev.toFixed(2)}
+                          </p>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Real-time Order Log Table */}
+              <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm space-y-3 p-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider font-mono flex items-center gap-1.5">
+                    <ClipboardList className="w-4 h-4 text-slate-700" />
+                    Incoming Real-time Order Transactions Log
+                  </h4>
+                  <span className="text-[10px] text-slate-400 font-mono">Click row to preview in Thermal Printer</span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-slate-600">
+                    <thead className="bg-slate-50 text-[10px] text-slate-400 uppercase font-mono border-b border-slate-100">
+                      <tr>
+                        <th className="py-2.5 px-3">Table #</th>
+                        <th className="py-2.5 px-3">Order ID</th>
+                        <th className="py-2.5 px-3">Total Amount</th>
+                        <th className="py-2.5 px-3">Payment Status</th>
+                        <th className="py-2.5 px-3">Payment Method</th>
+                        <th className="py-2.5 px-3">Timestamp</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-mono">
+                      {orders.map(order => (
+                        <tr 
+                          key={order.id} 
+                          onClick={() => setSelectedPrintedOrder(order)}
+                          className={`hover:bg-slate-50 transition-colors cursor-pointer group ${selectedPrintedOrder?.id === order.id ? 'bg-indigo-50/40' : ''}`}
+                        >
+                          <td className="py-2.5 px-3 font-sans font-bold text-slate-800">
+                            Table {order.table_number}
+                          </td>
+                          <td className="py-2.5 px-3 text-[10px] text-slate-400">
+                            #{order.id.slice(0, 8).toUpperCase()}
+                          </td>
+                          <td className="py-2.5 px-3 font-bold text-slate-900">
+                            ${order.total_amount.toFixed(2)}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full border ${
+                              order.payment_status === 'paid' 
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                                : order.payment_status === 'failed'
+                                ? 'bg-red-50 text-red-700 border-red-200'
+                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                            }`}>
+                              {order.payment_status.toUpperCase()}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-[10px]">
+                            {order.payment_method ? (
+                              <span className="capitalize bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">
+                                {order.payment_method}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300">-</span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 text-[10px] text-slate-400 font-sans">
+                            {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* TAB 1: ORDER QUEUES */}
           {activeTab === 'orders' && (
             <div className="space-y-6">
@@ -584,9 +884,253 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
             </div>
           )}
 
-          {/* TAB 3: INSTANT MENU TOGGLES */}
+          {/* TAB 3: INSTANT MENU TOGGLES (Module B) */}
           {activeTab === 'menu' && (
-            <div className="space-y-4">
+            <div className="space-y-6">
+              {/* Top Admin Action Bar */}
+              <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
+                    Interactive Menu & Back-Office Recipes
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Manage guest-facing digital menus and record secret kitchen instructions for the analog cooking staff.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowAddRecipe(!showAddRecipe);
+                    if (!recipeCategory && categories.length > 0) {
+                      setRecipeCategory(categories[0].id);
+                    }
+                  }}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold rounded-xl shadow-sm transition-colors cursor-pointer shrink-0"
+                >
+                  <Plus className="w-4 h-4" />
+                  {showAddRecipe ? 'Cancel Form' : 'Add New Recipe Item'}
+                </button>
+              </div>
+
+              {/* Collapsible Add Recipe Form (Module B) */}
+              {showAddRecipe && (
+                <form onSubmit={handleSaveRecipe} className="bg-slate-900 text-white rounded-2xl p-6 border border-slate-800 space-y-4 shadow-md">
+                  <div className="border-b border-slate-800 pb-3">
+                    <h4 className="text-xs font-black text-slate-300 uppercase tracking-widest font-mono">
+                      🧑‍🍳 Back-Office Recipe Creation Portal
+                    </h4>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Define metadata, ingredients tracking, and private preparations.</p>
+                  </div>
+
+                  {recipeError && (
+                    <div className="p-3 bg-red-950 border border-red-900 text-red-300 rounded-xl text-xs font-semibold">
+                      ⚠️ {recipeError}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Item Name */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">
+                        Item Name *
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Tandoori Pomfret"
+                        value={recipeName}
+                        onChange={(e) => setRecipeName(e.target.value)}
+                        className="w-full bg-slate-800 border border-slate-700 text-xs rounded-xl p-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400"
+                        required
+                      />
+                    </div>
+
+                    {/* Price */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">
+                        Base Price ($) *
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="e.g. 18.99"
+                        value={recipePrice}
+                        onChange={(e) => setRecipePrice(e.target.value)}
+                        className="w-full bg-slate-800 border border-slate-700 text-xs rounded-xl p-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400"
+                        required
+                      />
+                    </div>
+
+                    {/* Category Dropdown */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">
+                        Category Dropdown *
+                      </label>
+                      <select
+                        value={recipeCategory}
+                        onChange={(e) => setRecipeCategory(e.target.value)}
+                        className="w-full bg-slate-800 border border-slate-700 text-xs rounded-xl p-2.5 text-white focus:outline-none focus:border-indigo-400"
+                        required
+                      >
+                        {categories.map(cat => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Quick Filters */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">
+                        Dietary & Taste Profile Tags
+                      </label>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <label className="flex items-center gap-1.5 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700 cursor-pointer text-xs select-none hover:bg-slate-750">
+                          <input
+                            type="checkbox"
+                            checked={recipeIsVeg}
+                            onChange={(e) => {
+                              setRecipeIsVeg(e.target.checked);
+                              if (e.target.checked) setRecipeIsNonVeg(false);
+                            }}
+                            className="rounded text-emerald-500 bg-slate-900 border-slate-700 focus:ring-0"
+                          />
+                          <span className="text-emerald-400 font-bold text-[10px] uppercase font-mono">Veg</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700 cursor-pointer text-xs select-none hover:bg-slate-750">
+                          <input
+                            type="checkbox"
+                            checked={recipeIsNonVeg}
+                            onChange={(e) => {
+                              setRecipeIsNonVeg(e.target.checked);
+                              if (e.target.checked) setRecipeIsVeg(false);
+                            }}
+                            className="rounded text-red-500 bg-slate-900 border-slate-700 focus:ring-0"
+                          />
+                          <span className="text-red-400 font-bold text-[10px] uppercase font-mono">Non-Veg</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700 cursor-pointer text-xs select-none hover:bg-slate-750">
+                          <input
+                            type="checkbox"
+                            checked={recipeIsSpicy}
+                            onChange={(e) => setRecipeIsSpicy(e.target.checked)}
+                            className="rounded text-amber-500 bg-slate-900 border-slate-700 focus:ring-0"
+                          />
+                          <span className="text-amber-400 font-bold text-[10px] uppercase font-mono">Spicy</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Description textarea */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">
+                      Guest-Facing Menu Description *
+                    </label>
+                    <textarea
+                      placeholder="Describe the dish for customers reading the digital menu..."
+                      value={recipeDescription}
+                      onChange={(e) => setRecipeDescription(e.target.value)}
+                      rows={2}
+                      className="w-full bg-slate-800 border border-slate-700 text-xs rounded-xl p-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400 resize-none"
+                      required
+                    />
+                  </div>
+
+                  {/* Recipe/Ingredients Section: Dynamic List Input */}
+                  <div className="border-t border-slate-800 pt-4 space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block font-mono">
+                        Key Structural Ingredients Tracking (Dynamic List Input)
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="e.g. Basmati Rice, Boneless Chicken Breast, Saffron"
+                          value={ingredientInput}
+                          onChange={(e) => setIngredientInput(e.target.value)}
+                          className="flex-1 bg-slate-800 border border-slate-700 text-xs rounded-xl p-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleAddIngredient(e);
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddIngredient}
+                          className="bg-slate-750 border border-slate-700 text-slate-200 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-700 transition-colors"
+                        >
+                          Add Tag
+                        </button>
+                      </div>
+
+                      {/* Ingredient list display badges */}
+                      {ingredientList.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5 pt-2">
+                          {ingredientList.map((ing, idx) => (
+                            <span key={idx} className="inline-flex items-center gap-1 bg-slate-800 text-slate-300 px-2 py-1 rounded-lg text-[10px] font-mono border border-slate-700">
+                              {ing}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveIngredient(idx)}
+                                className="text-red-400 hover:text-red-300 text-xs font-bold cursor-pointer"
+                              >
+                                &times;
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-slate-500 italic">No tracking ingredients listed yet. Enter a value above and click Add Tag.</p>
+                      )}
+                    </div>
+
+                    {/* Private Kitchen prep instructions */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block font-mono">
+                        👨‍🍳 Private Kitchen Prep Recipe Details (Back-Office Only)
+                      </label>
+                      <textarea
+                        placeholder="Private instructions for the chefs (e.g. Marinate for 12 hours in greek yogurt, cook in clay oven at 450C)..."
+                        value={recipeInstructions}
+                        onChange={(e) => setRecipeInstructions(e.target.value)}
+                        rows={3}
+                        className="w-full bg-slate-800 border border-slate-700 text-xs rounded-xl p-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400 resize-none font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddRecipe(false)}
+                      className="px-4 py-2 border border-slate-700 text-slate-400 hover:text-white rounded-xl text-xs transition-colors cursor-pointer"
+                    >
+                      Dismiss Form
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmittingRecipe}
+                      className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 text-white font-bold px-6 py-2 rounded-xl text-xs transition-colors shadow-sm flex items-center gap-2"
+                    >
+                      {isSubmittingRecipe ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          Publishing Recipe...
+                        </>
+                      ) : (
+                        <>
+                          <ShieldCheck className="w-4 h-4" />
+                          Publish & Save Recipe
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Real-time Out-of-Stock Switchboard */}
               <div>
                 <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
                   Real-time Out-of-Stock Switchboard

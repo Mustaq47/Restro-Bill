@@ -228,6 +228,25 @@ export const GuestPhone: React.FC<GuestPhoneProps> = ({
             </div>
           )}
 
+          {/* Welcome Banner Card */}
+          <div className="mx-3 mt-3 bg-slate-900 text-white rounded-xl p-3 shadow-sm relative overflow-hidden shrink-0">
+            <div className="relative z-10 space-y-0.5">
+              <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest font-mono">
+                Now Connected
+              </span>
+              <h2 className="text-xs font-black tracking-tight flex items-center gap-1">
+                Welcome to Table {tableNumber}
+              </h2>
+              <p className="text-[9px] text-slate-300 leading-normal">
+                Order digitally straight to the kitchen. Request waiter assistance, refill water, or call for the bill anytime.
+              </p>
+            </div>
+            {/* Background decoration */}
+            <div className="absolute right-1 bottom-1 text-4xl opacity-10 select-none">
+              🍛
+            </div>
+          </div>
+
           {/* Catalog Filter Controls */}
           <div className="p-3 bg-white space-y-2 border-b border-slate-100">
             {/* Search Input */}

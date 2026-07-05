@@ -5,8 +5,8 @@
 
 -- 1. Create Enums for consistent status tracking
 CREATE TYPE order_status AS ENUM ('pending', 'accepted', 'preparing', 'completed', 'cancelled');
-CREATE TYPE payment_status AS ENUM ('unpaid', 'paid');
-CREATE TYPE payment_method AS ENUM ('cash', 'digital');
+CREATE TYPE payment_status AS ENUM ('pending', 'paid', 'failed');
+CREATE TYPE payment_method AS ENUM ('cash', 'upi', 'card');
 CREATE TYPE service_request_type AS ENUM ('waiter', 'water', 'bill');
 CREATE TYPE service_request_status AS ENUM ('pending', 'resolved');
 
@@ -29,7 +29,7 @@ CREATE TABLE menu_categories (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 4. Menu Items Table (Product catalog)
+-- 4. Menu Items Table (Product catalog with private recipe instructions/ingredients tracking)
 CREATE TABLE menu_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     category_id UUID NOT NULL REFERENCES menu_categories(id) ON DELETE CASCADE,
@@ -41,6 +41,8 @@ CREATE TABLE menu_items (
     is_non_veg BOOLEAN NOT NULL DEFAULT FALSE,
     is_spicy BOOLEAN NOT NULL DEFAULT FALSE,
     image_url TEXT,
+    recipe_instructions TEXT, -- Secret kitchen instructions
+    ingredients TEXT,          -- Private back-office key structural ingredients list
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -51,7 +53,7 @@ CREATE TABLE orders (
     table_id UUID REFERENCES tables(id) ON DELETE SET NULL,
     table_number INT NOT NULL, -- Hardcoded for speed/decoupling
     status order_status NOT NULL DEFAULT 'pending',
-    payment_status payment_status NOT NULL DEFAULT 'unpaid',
+    payment_status payment_status NOT NULL DEFAULT 'pending',
     payment_method payment_method,
     total_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 CHECK (total_amount >= 0),
     notes TEXT,
@@ -80,6 +82,17 @@ CREATE TABLE service_requests (
     status service_request_status NOT NULL DEFAULT 'pending',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 8. Users / Customers Table (Mandatory country-coded phone number validation constraint)
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    full_name VARCHAR(100) NOT NULL,
+    email VARCHAR(150) UNIQUE NOT NULL,
+    phone_number VARCHAR(20) UNIQUE NOT NULL CHECK (phone_number ~ '^\+?[0-9]{10,12}$'),
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(20) NOT NULL DEFAULT 'guest' CHECK (role IN ('admin', 'guest')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ==========================================
